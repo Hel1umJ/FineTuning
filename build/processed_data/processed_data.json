@@ -1,0 +1,26 @@
+[
+  {
+    "text": "Describe what you see in this image. <image_1>",
+    "image_path": "images/sample1.jpg"
+  },
+  {
+    "text": "What is unusual about this image? <image_1>",
+    "image_path": "images/sample2.jpg"
+  },
+  {
+    "text": "Create a safety report based on this image. <image_1>",
+    "image_path": "images/sample3.jpg"
+  },
+  {
+    "text": "What maintenance issues can you identify in this image? <image_1>",
+    "image_path": "images/sample4.jpg"
+  },
+  {
+    "text": "Describe this landscape scene. <image_1>",
+    "image_path": "images/sample5.jpg"
+  },
+  {
+    "text": "Is there a text-only question you can answer?",
+    "image_path": null
+  }
+]
