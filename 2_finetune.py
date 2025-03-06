@@ -153,13 +153,14 @@ def load_data_from_json(data_path, base_path=""):
         
         # Create prompt and assistant response format
         # For Phi-3 Vision, we use the <image> tag to indicate image placement
-        prompt = example["text"]
+        prompt = example.get("text") or example.get("prompt", "")
         if "<image>" not in prompt and image_path:
             prompt = "<image>\n" + prompt
         
-        # Add a simple assistant response for fine-tuning
-        # In a real scenario, you would have ground truth responses
-        assistant_response = "This is a placeholder response for fine-tuning."
+        # Use the provided completion if available, otherwise use a placeholder
+        assistant_response = example.get("completion")
+        if not assistant_response:
+            assistant_response = "This is a placeholder response for fine-tuning."
         
         processed_data.append({
             "userPrompt": prompt,
@@ -214,6 +215,10 @@ def preprocess_for_phi3_vision(examples, processor, tokenizer, max_seq_length=51
     else:
         pixel_values = None
     
+    # Make sure tokenizer has left padding set for Flash Attention compatibility
+    if hasattr(tokenizer, "padding_side"):
+        tokenizer.padding_side = 'left'
+        
     # Tokenize texts
     encodings = tokenizer(
         texts,
@@ -268,13 +273,35 @@ def fine_tune_model(args):
     
     # Load model components
     logger.info(f"Loading model from {args.model_name}...")
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
-    processor = AutoProcessor.from_pretrained(args.model_name, trust_remote_code=True)
+    
+    # Use a custom cache directory to avoid permission issues
+    cache_dir = os.environ.get("HF_HOME", None)
+    
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_name, 
+            trust_remote_code=True, 
+            cache_dir=cache_dir
+        )
+        # Set padding_side to 'left' for Flash Attention compatibility
+        tokenizer.padding_side = 'left'
+        logger.info("Tokenizer initialized with padding_side='left' for Flash Attention compatibility")
+        
+        processor = AutoProcessor.from_pretrained(
+            args.model_name, 
+            trust_remote_code=True,
+            cache_dir=cache_dir
+        )
+        logger.info("Successfully loaded tokenizer and processor")
+    except Exception as e:
+        logger.error(f"Error loading tokenizer or processor: {e}")
+        raise
     
     # Configure model loading parameters
     model_kwargs = {
         "torch_dtype": torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         "trust_remote_code": True,
+        "cache_dir": cache_dir,
     }
     
     # Setup for CUDA if available
@@ -285,7 +312,12 @@ def fine_tune_model(args):
         })
     
     # Load the model
-    model = AutoModelForCausalLM.from_pretrained(args.model_name, **model_kwargs)
+    try:
+        model = AutoModelForCausalLM.from_pretrained(args.model_name, **model_kwargs)
+        logger.info("Successfully loaded model")
+    except Exception as e:
+        logger.error(f"Error loading model: {e}")
+        raise
     
     # Prepare the model for LoRA fine-tuning
     logger.info("Setting up LoRA fine-tuning...")

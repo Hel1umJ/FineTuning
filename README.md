@@ -65,20 +65,27 @@ The pipeline expects input data in a specific format:
 
 ### Input Format (for Step 1)
 
-Input data should be in JSON format with image paths and prompts:
+The pipeline expects a file named `sample_data.json` in the `sample_data` directory with the following format:
 
 ```json
 [
   {
     "prompt": "Describe what you see in this image. <image_1>",
-    "image_path": "path/to/image1.jpg"
+    "image_path": "images/image1.jpg",
+    "completion": "This is a modern office building with glass facades..."
   },
   {
     "prompt": "What is unusual about this image? <image_1>",
-    "image_path": "path/to/image2.jpg"
+    "image_path": "images/image2.jpg",
+    "completion": "The unusual aspect is that the car appears to be floating..."
   }
 ]
 ```
+
+Notes:
+- The `prompt` field contains the text prompt to the model
+- The `image_path` field is relative to the sample_data directory
+- The `completion` field contains the expected response for fine-tuning
 
 ### Processed Format (after Step 1)
 
@@ -137,6 +144,8 @@ These steps prepare your model for production use while providing metrics on its
 - **Memory Issues**: Reduce batch size or use gradient accumulation
 - **CUDA Problems**: Make sure PyTorch is installed with CUDA support
 - **Flash Attention**: Install flash-attn properly for your CUDA version
+- **Permission Issues**: The pipeline automatically sets up a custom HuggingFace cache directory in the build folder to avoid permission problems
+- **Padding Direction**: All tokenizers are configured with `padding_side='left'` for compatibility with Flash Attention in Phi-3 models
 
 ## License
 

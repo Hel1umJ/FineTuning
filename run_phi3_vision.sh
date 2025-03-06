@@ -4,6 +4,10 @@
 
 set -e  # Exit on any error
 
+# Set custom HuggingFace cache directory within our build folder
+export HF_HOME="./build/hf_cache"
+mkdir -p $HF_HOME
+
 # Set build directory for all artifacts
 BUILD_DIR="./build"
 
@@ -17,7 +21,6 @@ PROCESSED_DIR="$BUILD_DIR/processed_data"
 OUTPUT_DIR="$BUILD_DIR/fine_tuned_model"
 ONNX_DIR="$BUILD_DIR/onnx_model"
 EVAL_DIR="$BUILD_DIR/evaluation_results"
-
 echo "===================================================================="
 echo "Step 1: Data Preprocessing"
 echo "===================================================================="

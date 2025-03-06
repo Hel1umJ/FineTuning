@@ -21,6 +21,15 @@ from tqdm import tqdm
 import torch
 from torch.utils.data import Dataset
 from transformers import AutoProcessor, AutoTokenizer
+import logging
+
+# Configure basic logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Preprocess data for Phi-3 Vision fine-tuning")
@@ -64,9 +73,26 @@ class DataFormatter:
         self.image_size = image_size
         self.max_length = max_length
         
-        print(f"Loading processor and tokenizer from {model_name}...")
-        self.processor = AutoProcessor.from_pretrained(model_name, trust_remote_code=True)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        logger.info(f"Loading processor and tokenizer from {model_name}...")
+        try:
+            cache_dir = os.environ.get("HF_HOME", None)
+            self.processor = AutoProcessor.from_pretrained(
+                model_name, 
+                trust_remote_code=True,
+                cache_dir=cache_dir
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_name, 
+                trust_remote_code=True,
+                cache_dir=cache_dir
+            )
+            # Set padding_side to 'left' for Flash Attention compatibility
+            self.tokenizer.padding_side = 'left'
+            logger.info("Tokenizer initialized with padding_side='left' for Flash Attention compatibility")
+            logger.info("Successfully loaded processor and tokenizer")
+        except Exception as e:
+            logger.error(f"Error loading model components: {e}")
+            raise
 
     def process_example(self, text: str, image_path: Optional[str] = None):
         """Process a single example with text and optional image"""
@@ -84,7 +110,10 @@ class DataFormatter:
         
     def tokenize_text(self, text: str):
         """Tokenize text input"""
-        return self.tokenizer(text, truncation=True, max_length=self.max_length)
+        # Ensure padding_side is 'left' for Flash Attention compatibility
+        if hasattr(self.tokenizer, "padding_side"):
+            self.tokenizer.padding_side = 'left'
+        return self.tokenizer(text, truncation=True, padding="max_length", max_length=self.max_length)
 
 def read_data_format(data_dir: str) -> List[Dict[str, Any]]:
     """

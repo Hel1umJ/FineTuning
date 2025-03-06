@@ -9,6 +9,7 @@ Usage:
     python 5_inference.py --model_path ./fine_tuned_model --image_path ./processed_data/images/sample1.jpg --prompt "Describe what you see in this image."
 """
 
+import os
 import argparse
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
@@ -48,8 +49,28 @@ def main():
     
     # Load components
     print(f"Loading model from {args.model_path}...")
-    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
-    processor = AutoProcessor.from_pretrained(args.model_path)
+    
+    # Use a custom cache directory to avoid permission issues
+    cache_dir = os.environ.get("HF_HOME", None)
+    
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(
+            args.model_path, 
+            trust_remote_code=True,
+            cache_dir=cache_dir
+        )
+        # Set padding_side to 'left' for Flash Attention compatibility
+        tokenizer.padding_side = 'left'
+        print("Tokenizer initialized with padding_side='left' for Flash Attention compatibility")
+        processor = AutoProcessor.from_pretrained(
+            args.model_path,
+            trust_remote_code=True,
+            cache_dir=cache_dir
+        )
+        print("Successfully loaded tokenizer and processor")
+    except Exception as e:
+        print(f"Error loading model components: {e}")
+        raise
     
     # Determine if we're loading a base model or adapter
     has_adapter = False
@@ -75,16 +96,22 @@ def main():
             "device_map": "auto",
         })
     
-    if has_adapter:
-        # Load the base model
-        base_model_name = "microsoft/Phi-3-vision-128k-instruct"
-        model = AutoModelForCausalLM.from_pretrained(base_model_name, **model_kwargs)
-        
-        # Load the adapter
-        model = PeftModel.from_pretrained(model, f"{args.model_path}/lora_adapter")
-    else:
-        # Load the full fine-tuned model
-        model = AutoModelForCausalLM.from_pretrained(args.model_path, **model_kwargs)
+    try:
+        if has_adapter:
+            # Load the base model
+            base_model_name = "microsoft/Phi-3-vision-128k-instruct"
+            model = AutoModelForCausalLM.from_pretrained(base_model_name, **model_kwargs)
+            
+            # Load the adapter
+            model = PeftModel.from_pretrained(model, f"{args.model_path}/lora_adapter")
+            print("Successfully loaded base model with LoRA adapter")
+        else:
+            # Load the full fine-tuned model
+            model = AutoModelForCausalLM.from_pretrained(args.model_path, **model_kwargs)
+            print("Successfully loaded fine-tuned model")
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        raise
     
     # Load and preprocess the image
     print(f"Loading image from {args.image_path}...")
@@ -99,6 +126,10 @@ def main():
     chat_prompt = f"<|user|>\n{prompt}\n<|assistant|>"
     
     # Process inputs
+    # Ensure left padding is set for Flash Attention compatibility
+    if hasattr(tokenizer, "padding_side"):
+        tokenizer.padding_side = 'left'
+        
     inputs = processor(
         text=chat_prompt,
         images=image,
